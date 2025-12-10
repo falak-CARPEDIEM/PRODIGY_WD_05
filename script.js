@@ -316,3 +316,26 @@ if (locBtn) {
 // ======= No default fetch on load (keeps UI blank until user acts) =======
 // To enable a default city, uncomment below:
 // window.addEventListener("load", () => fetchWeatherByCity("Mumbai"));
+function onLocationError(err){
+  console.error('geo err', err);
+  if(err.code === 1) {
+    setStatus("Location access denied. Please enable Location for this site in your browser settings.", true);
+  } else if(err.code === 2) {
+    setStatus("Position unavailable. Try again or check network.", true);
+  } else if(err.code === 3) {
+    setStatus("Location request timed out. Try again.", true);
+  } else {
+    setStatus("Location error: " + err.message, true);
+  }
+}
+
+// use this when clicking the loc button
+locBtn.addEventListener("click", () => {
+  if(!navigator.geolocation){ setStatus("Geolocation not supported in this browser.", true); return; }
+  setStatus("Requesting your location…");
+  navigator.geolocation.getCurrentPosition(
+    pos => fetchWeatherByCoords(pos.coords.latitude, pos.coords.longitude),
+    onLocationError,
+    { enableHighAccuracy: true, timeout: 12000 }
+  );
+});
