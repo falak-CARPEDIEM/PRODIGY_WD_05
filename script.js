@@ -2,11 +2,8 @@
 // API KEYS (replace locally)
 // ======================
 // Put your NEW OpenWeather API key here (do NOT share it publicly)
-const API_KEY = "YOUR_API_KEY_HERE";
+const API_KEY = window.LOCAL_API_KEY || "";
 const BASE_URL = "https://api.openweathermap.org/data/2.5/weather?units=metric";
-// config.js (DO NOT commit this)
-export const API_KEY = "your_new_key_here";
-
 
 // Optional WeatherAPI fallback for UV (free tier typically includes current.uv).
 const USE_WEATHERAPI_FALLBACK = false; // set true to enable fallback
@@ -342,4 +339,3 @@ locBtn.addEventListener("click", () => {
     { enableHighAccuracy: true, timeout: 12000 }
   );
 });
-
