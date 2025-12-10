@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Weather · Falak</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=SF+Pro+Display:wght@300;400;500;600&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div class="phone-shell">
+    <div class="sky-bg"></div>
+
+    <!-- HEADER: search + theme toggle + astro -->
+    <header class="hero">
+      <div class="hero-top">
+        <form id="search-form" class="search-top" aria-label="Search city">
+          <input id="city-input" type="text" placeholder="Search city or place" autocomplete="off" />
+          <button type="submit">Search</button>
+        </form>
+
+        <div class="controls-top-right">
+          <!-- Theme toggle -->
+          <button id="theme-toggle" class="theme-toggle" aria-label="Toggle theme">🌙</button>
+        </div>
+      </div>
+
+      <div class="astro-wrap">
+        <!-- sun / moon decorative circle -->
+        <div id="astro-icon" class="astro moon" aria-hidden="true"></div>
+      </div>
+
+      <div class="hero-main">
+        <h1 id="city-name">—</h1>
+        <p class="big-temp"><span id="temp">--</span>°</p>
+        <p class="condition" id="condition">—</p>
+        <p class="hi-low">H:<span id="hi-temp">--</span>° · L:<span id="low-temp">--</span>°</p>
+      </div>
+    </header>
+
+    <section class="summary-card">
+      <p id="summary-text">Type a city or use your location to see the weather.</p>
+    </section>
+
+    <main class="content">
+      <section class="cards-row">
+        <article class="card">
+          <h3>Feels Like</h3>
+          <p class="card-main" id="feels-like">--°</p>
+          <p class="card-sub">Similar to actual temperature.</p>
+        </article>
+
+        <article class="card">
+          <h3>Air Quality</h3>
+          <p class="card-main" id="air-quality">--</p>
+          <p class="card-sub" id="air-text">Air quality not included yet.</p>
+        </article>
+
+        <article class="card">
+          <h3>Wind</h3>
+          <p class="card-main" id="wind">-- km/h</p>
+          <p class="card-sub" id="wind-dir">Direction: --</p>
+        </article>
+
+        <article class="card">
+          <h3>UV Index</h3>
+          <p class="card-main" id="uv-index">--</p>
+          <p class="card-sub" id="uv-text">UV index requires One Call API or fallback.</p>
+        </article>
+
+        <article class="card">
+          <h3>Precipitation</h3>
+          <p class="card-main" id="precip">0.0 mm</p>
+          <p class="card-sub">Next few hours: —</p>
+        </article>
+
+        <article class="card">
+          <h3>Visibility</h3>
+          <p class="card-main" id="visibility">-- km</p>
+          <p class="card-sub">Perfectly clear / hazy etc.</p>
+        </article>
+
+        <article class="card">
+          <h3>Humidity</h3>
+          <p class="card-main" id="humidity">--%</p>
+          <p class="card-sub">Dew point info later.</p>
+        </article>
+
+        <article class="card">
+          <h3>Pressure</h3>
+          <p class="card-main" id="pressure">-- hPa</p>
+          <p class="card-sub">Low · Normal · High</p>
+        </article>
+      </section>
+    </main>
+
+    <section class="controls">
+      <button id="loc-btn" class="loc-btn">Use current location</button>
+      <p id="status" class="status">Waiting for input…</p>
+    </section>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
