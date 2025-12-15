@@ -339,3 +339,4 @@ locBtn.addEventListener("click", () => {
     { enableHighAccuracy: true, timeout: 12000 }
   );
 });
+fetchUV(lat, lon);
