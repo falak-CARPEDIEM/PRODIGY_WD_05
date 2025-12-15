@@ -1,17 +1,16 @@
 // ======================
-// API KEYS (replace locally)
+// API KEYS
 // ======================
-// Put your NEW OpenWeather API key here (do NOT share it publicly)
 const API_KEY = window.LOCAL_API_KEY || "";
-const BASE_URL = "https://cors-anywhere.herokuapp.com/https://api.openweathermap.org/data/2.5/weather?units=metric";
 
-// Optional WeatherAPI fallback for UV (free tier typically includes current.uv).
-const USE_WEATHERAPI_FALLBACK = false; // set true to enable fallback
-const WEATHERAPI_KEY = "YOUR_WEATHERAPI_KEY_IF_USING_FALLBACK";
+// ======================
+// BASE URL (Cloudflare Worker Proxy)
+// ======================
+const BASE_URL = "https://yellow-salad-e9d7falak-weather-proxy.falakmujawar27.workers.dev";
 
-// Theme + behavior toggles
+// ======================
 const START_AS_LIGHT = false;
-const SHOW_TIME = false; // set true if you want header time visible on each result
+const SHOW_TIME = false;
 
 // =============== ELEMENTS
 const cityNameEl = document.getElementById("city-name");
@@ -35,308 +34,124 @@ const statusEl = document.getElementById("status");
 const searchForm = document.getElementById("search-form");
 const cityInput = document.getElementById("city-input");
 const locBtn = document.getElementById("loc-btn");
-const astroIcon = document.getElementById("astro-icon");
-const themeToggleBtn = document.getElementById("theme-toggle");
-const phoneShell = document.querySelector(".phone-shell");
 
-// =============== HELPERS
-function setStatus(msg, isError=false){
-  if(!statusEl) return;
+// ====================== Helpers
+function setStatus(msg, error = false) {
   statusEl.textContent = msg;
-  statusEl.classList.toggle("error", !!isError);
+  statusEl.classList.toggle("error", error);
 }
-function getWindDirection(deg){
+function getWindDirection(deg) {
   if (deg == null) return "--";
   const dirs = ["N","NE","E","SE","S","SW","W","NW"];
-  const index = Math.round(deg/45) % 8;
-  return dirs[index];
+  return dirs[Math.round(deg / 45) % 8];
 }
-function buildSummary(main, desc, temp, feels) {
-  if (!main) return "Weather data loaded.";
-  const t = Math.round(temp); const f = Math.round(feels);
-  const cond = desc || main;
-  return `${cond} with a temperature of ${t}°, feels like ${f}°.`;
-}
-function aqiLabel(aqi){
-  if (!aqi && aqi !== 0) return "--";
-  switch (aqi) {
-    case 1: return "Good";
-    case 2: return "Fair";
-    case 3: return "Moderate";
-    case 4: return "Poor";
-    case 5: return "Very Poor";
-    default: return "--";
-  }
-}
-function uvLabel(uvi){
-  if (uvi == null || isNaN(uvi)) return "--";
-  if (uvi < 3) return "Low";
-  if (uvi < 6) return "Moderate";
-  if (uvi < 8) return "High";
-  if (uvi < 11) return "Very High";
+function uvLabel(u) {
+  if (u < 3) return "Low";
+  if (u < 6) return "Moderate";
+  if (u < 8) return "High";
+  if (u < 11) return "Very High";
   return "Extreme";
 }
-
-// =============== THEME
-function initTheme() {
-  const saved = localStorage.getItem("weather-theme");
-  if (saved) {
-    document.body.classList.toggle("light-theme", saved === "light");
-    themeToggleBtn.textContent = saved === "light" ? "☀️" : "🌙";
-  } else {
-    document.body.classList.toggle("light-theme", START_AS_LIGHT);
-    themeToggleBtn.textContent = START_AS_LIGHT ? "☀️" : "🌙";
-  }
-}
-function toggleTheme() {
-  const isLight = document.body.classList.toggle("light-theme");
-  themeToggleBtn.textContent = isLight ? "☀️" : "🌙";
-  localStorage.setItem("weather-theme", isLight ? "light" : "dark");
-}
-if (themeToggleBtn) { themeToggleBtn.addEventListener("click", toggleTheme); }
-initTheme();
-
-// =============== DAY/NIGHT & TIME
-function formatLocalTimeFromUnix(unixSeconds, timezoneShiftSeconds) {
-  const date = new Date((unixSeconds + (timezoneShiftSeconds || 0)) * 1000);
-  return date.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
-}
-function updateAstroAndTime(dtUnix, timezoneShiftSeconds, sunriseUnix, sunsetUnix) {
-  const localNowSec = (dtUnix ?? Math.floor(Date.now()/1000)) + (timezoneShiftSeconds || 0);
-  const sunriseLocal = sunriseUnix ? sunriseUnix + (timezoneShiftSeconds || 0) : null;
-  const sunsetLocal = sunsetUnix ? sunsetUnix + (timezoneShiftSeconds || 0) : null;
-
-  let isDay = true;
-  if (sunriseLocal && sunsetLocal) {
-    isDay = localNowSec >= sunriseLocal && localNowSec < sunsetLocal;
-  } else {
-    const hr = new Date(localNowSec * 1000).getHours();
-    isDay = hr >= 6 && hr < 18;
-  }
-
-  astroIcon.classList.remove("sun","moon");
-  astroIcon.classList.add(isDay ? "sun" : "moon");
-
-  // optional time display
-  const timeWrap = document.getElementById("time-wrap");
-  if (timeWrap) timeWrap.style.display = SHOW_TIME ? "block" : "none";
-  if (SHOW_TIME && timeWrap) timeWrap.textContent = formatLocalTimeFromUnix(dtUnix, timezoneShiftSeconds);
+function aqiLabel(aqi) {
+  return ["","Good","Fair","Moderate","Poor","Very Poor"][aqi] || "--";
 }
 
-// =============== RENDER & SCROLL RESET
+// ====================== RENDER
 function renderWeather(data) {
-  if(!data) return;
-  const { name, sys, main, weather, wind, visibility, dt, timezone, rain, snow, coord } = data;
-  const cond = weather && weather[0] ? weather[0] : null;
+  const { name, main, weather, wind, sys, visibility, rain, snow, coord } = data;
+  const cond = weather?.[0];
 
-  cityNameEl.textContent = name || "Unknown";
-  const temp = main?.temp ?? 0;
-  const feels = main?.feels_like ?? temp;
-  const tMax = main?.temp_max ?? temp;
-  const tMin = main?.temp_min ?? temp;
-  tempEl.textContent = Math.round(temp);
-  conditionEl.textContent = cond?.main || "—";
-  hiTempEl.textContent = Math.round(tMax);
-  lowTempEl.textContent = Math.round(tMin);
-  summaryTextEl.textContent = buildSummary(cond?.main, cond?.description, temp, feels);
+  cityNameEl.textContent = name;
+  tempEl.textContent = Math.round(main.temp);
+  conditionEl.textContent = cond?.main ?? "--";
+  hiTempEl.textContent = Math.round(main.temp_max);
+  lowTempEl.textContent = Math.round(main.temp_min);
 
-  // cards
-  feelsLikeEl.textContent = `${Math.round(feels)}°`;
-  humidityEl.textContent = main?.humidity != null ? `${main.humidity}%` : "--%";
-  pressureEl.textContent = main?.pressure != null ? `${main.pressure} hPa` : "-- hPa";
+  summaryTextEl.textContent = `${cond?.description} with a temperature of ${Math.round(main.temp)}°`;
 
-  const windSpeed = wind?.speed != null ? wind.speed * 3.6 : null;
-  windEl.textContent = windSpeed != null ? `${windSpeed.toFixed(0)} km/h` : "-- km/h";
-  const dir = getWindDirection(wind?.deg);
-  windDirEl.textContent = `Direction: ${wind?.deg != null ? `${wind.deg}° ${dir}` : "--"}`;
+  feelsLikeEl.textContent = `${Math.round(main.feels_like)}°`;
+  humidityEl.textContent = `${main.humidity}%`;
+  pressureEl.textContent = `${main.pressure} hPa`;
 
-  visibilityEl.textContent = visibility != null ? `${(visibility/1000).toFixed(1)} km` : "-- km";
+  windEl.textContent = `${(wind.speed * 3.6).toFixed(0)} km/h`;
+  windDirEl.textContent = `${wind.deg}° ${getWindDirection(wind.deg)}`;
 
-  let precipVal = 0;
-  if (rain && (rain["1h"] || rain["3h"])) precipVal = rain["1h"] || rain["3h"];
-  else if (snow && (snow["1h"] || snow["3h"])) precipVal = snow["1h"] || snow["3h"];
-  precipEl.textContent = `${precipVal.toFixed(1)} mm`;
+  visibilityEl.textContent = `${(visibility/1000).toFixed(1)} km`;
 
-  airQualityEl.textContent = "--";
-  airTextEl.textContent = "Loading air quality…";
-  uvIndexEl.textContent = "--";
-  uvTextEl.textContent = "Loading UV…";
+  const rainVal = rain?.["1h"] || rain?.["3h"] || snow?.["1h"] || snow?.["3h"] || 0;
+  precipEl.textContent = `${rainVal.toFixed(1)} mm`;
 
-  const sunrise = sys?.sunrise ?? null;
-  const sunset = sys?.sunset ?? null;
-  updateAstroAndTime(dt, timezone, sunrise, sunset);
-
-  const lat = coord?.lat; const lon = coord?.lon;
-  if (lat != null && lon != null) {
-    fetchAirQuality(lat, lon);
-    fetchUV(lat, lon);
-  } else {
-    airQualityEl.textContent = "--";
-    airTextEl.textContent = "Air quality unavailable.";
-    uvIndexEl.textContent = "--";
-    uvTextEl.textContent = "UV unavailable.";
-  }
+  fetchAirQuality(coord.lat, coord.lon);
+  fetchUV(coord.lat, coord.lon);
 
   setStatus("Weather updated ✓");
-
-  // RESET scroll to top so the view always shows the hero and top cards clearly
-  if (phoneShell) phoneShell.scrollTop = 0;
 }
 
-// =============== FETCH WEATHER
+// ====================== PROXY FETCH
+async function proxyFetch(path) {
+  const res = await fetch(`${BASE_URL}${path}`);
+  if (!res.ok) throw new Error("Proxy error " + res.status);
+  return res.json();
+}
+
+// ====================== WEATHER
 async function fetchWeatherByCity(city) {
-  if (!API_KEY || API_KEY === "YOUR_NEW_OPENWEATHER_API_KEY") {
-    setStatus("Please add your OpenWeather API key in script.js", true);
-    return;
-  }
   try {
     setStatus("Loading weather…");
-    const url = `${BASE_URL}&q=${encodeURIComponent(city)}&appid=${API_KEY}`;
-    const res = await fetch(url);
-    if (!res.ok) {
-      if (res.status === 404) throw new Error("City not found. Try another name.");
-      throw new Error(`Failed to fetch weather (${res.status}).`);
-    }
-    const data = await res.json();
+    const data = await proxyFetch(`/weather?q=${city}&units=metric&appid=${API_KEY}`);
     renderWeather(data);
-  } catch (err) {
-    console.error(err);
-    setStatus(err.message || "Something went wrong.", true);
+  } catch (e) {
+    setStatus(e.message, true);
   }
 }
 
 async function fetchWeatherByCoords(lat, lon) {
-  if (!API_KEY) { setStatus("Add API key.", true); return; }
   try {
-    setStatus("Getting weather for your location…");
-    const url = `${BASE_URL}&lat=${lat}&lon=${lon}&appid=${API_KEY}`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`Could not fetch location weather (${res.status}).`);
-    const data = await res.json();
+    setStatus("Loading your location…");
+    const data = await proxyFetch(`/weather?lat=${lat}&lon=${lon}&units=metric&appid=${API_KEY}`);
     renderWeather(data);
-  } catch (err) {
-    console.error(err);
-    setStatus(err.message || "Location fetch failed.", true);
-  }
-}
-
-// =============== AQI & UV
-async function fetchAirQuality(lat, lon){
-  if (!API_KEY) return;
-  try {
-    const url = `https://api.openweathermap.org/data/2.5/air_pollution?lat=${lat}&lon=${lon}&appid=${API_KEY}`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`AQ fetch failed (${res.status})`);
-    const json = await res.json();
-    const item = json.list && json.list[0];
-    if (!item) throw new Error("No AQ data");
-    const aqi = item.main?.aqi;
-    airQualityEl.textContent = aqiLabel(aqi);
-    const pm25 = item.components?.pm2_5;
-    airTextEl.textContent = pm25 != null ? `PM2.5: ${pm25} μg/m³` : "Air details limited.";
-  } catch (err) {
-    console.warn("AQ error:", err);
-    airQualityEl.textContent = "--";
-    airTextEl.textContent = "Air quality unavailable.";
-  }
-}
-
-// Primary UV attempt: One Call
-async function fetchUV(lat, lon){
-  if (!API_KEY) return;
-  try {
-    const url = `https://api.openweathermap.org/data/2.5/onecall?lat=${lat}&lon=${lon}&exclude=minutely,hourly,daily,alerts&appid=${API_KEY}`;
-    console.info("fetchUV ->", url);
-    const res = await fetch(url);
-    console.info("OneCall status:", res.status);
-    if (!res.ok) throw new Error(`One Call responded ${res.status}`);
-    const json = await res.json();
-    console.info("OneCall json keys:", Object.keys(json || {}));
-    const uvi = json.current?.uvi;
-    if (uvi == null) throw new Error("No UVI in One Call response");
-    uvIndexEl.textContent = (uvi != null ? uvi.toFixed(1) : "--");
-    uvTextEl.textContent = uvLabel(uvi);
-  } catch (err) {
-    console.warn("UV One Call error:", err);
-    if (USE_WEATHERAPI_FALLBACK && WEATHERAPI_KEY && WEATHERAPI_KEY !== "YOUR_WEATHERAPI_KEY_IF_USING_FALLBACK") {
-      fetchUV_fromWeatherAPI(lat, lon);
-      return;
-    }
-    if (String(err).includes("401") || String(err).includes("403")) {
-      uvIndexEl.textContent = Math.round(Math.random() * 11);
-      uvTextEl.textContent = "Approx UV (sample)";
-    } else {
-      uvIndexEl.textContent = "--";
-      uvTextEl.textContent = "UV data unavailable.";
-    }
-  }
-}
-
-// Optional fallback (WeatherAPI)
-async function fetchUV_fromWeatherAPI(lat, lon) {
-  try {
-    const url = `https://api.weatherapi.com/v1/current.json?key=${WEATHERAPI_KEY}&q=${lat},${lon}`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error("WeatherAPI UV fetch failed");
-    const json = await res.json();
-    const uvi = json.current?.uv;
-    uvIndexEl.textContent = (uvi != null ? uvi.toFixed(1) : "--");
-    uvTextEl.textContent = uvLabel(uvi);
   } catch (e) {
-    console.warn("WeatherAPI UV error:", e);
+    setStatus(e.message, true);
+  }
+}
+
+// ====================== AQI
+async function fetchAirQuality(lat, lon) {
+  try {
+    const json = await proxyFetch(`/air_pollution?lat=${lat}&lon=${lon}&appid=${API_KEY}`);
+    const item = json.list[0];
+    airQualityEl.textContent = aqiLabel(item.main.aqi);
+    airTextEl.textContent = `PM2.5: ${item.components.pm2_5} μg/m³`;
+  } catch {
+    airQualityEl.textContent = "--";
+    airTextEl.textContent = "Unavailable";
+  }
+}
+
+// ====================== UV INDEX (OneCall)
+async function fetchUV(lat, lon) {
+  try {
+    const json = await proxyFetch(`/onecall?lat=${lat}&lon=${lon}&exclude=hourly,daily,minutely,alerts&appid=${API_KEY}`);
+    const uvi = json.current?.uvi;
+    uvIndexEl.textContent = uvi.toFixed(1);
+    uvTextEl.textContent = uvLabel(uvi);
+  } catch {
     uvIndexEl.textContent = "--";
-    uvTextEl.textContent = "UV fallback failed.";
+    uvTextEl.textContent = "Unavailable";
   }
 }
 
-// =============== EVENTS
-if (searchForm && cityInput) {
-  searchForm.addEventListener("submit", (e) => {
-    e.preventDefault();
-    const city = cityInput.value.trim();
-    if (!city) { setStatus("Please type a city name.", true); return; }
-    fetchWeatherByCity(city);
-  });
-}
-if (locBtn) {
-  locBtn.addEventListener("click", () => {
-    if (!navigator.geolocation) { setStatus("Geolocation not supported.", true); return; }
-    setStatus("Requesting your location…");
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const { latitude, longitude } = pos.coords;
-        fetchWeatherByCoords(latitude, longitude);
-      },
-      (err) => { console.error(err); setStatus("Location access denied. Try searching by city.", true); },
-      { enableHighAccuracy:true, timeout:10000 }
-    );
-  });
-}
+// ====================== EVENTS
+searchForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const city = cityInput.value.trim();
+  if (!city) return setStatus("Enter a city", true);
+  fetchWeatherByCity(city);
+});
 
-// ======= No default fetch on load (keeps UI blank until user acts) =======
-// To enable a default city, uncomment below:
-// window.addEventListener("load", () => fetchWeatherByCity("Mumbai"));
-function onLocationError(err){
-  console.error('geo err', err);
-  if(err.code === 1) {
-    setStatus("Location access denied. Please enable Location for this site in your browser settings.", true);
-  } else if(err.code === 2) {
-    setStatus("Position unavailable. Try again or check network.", true);
-  } else if(err.code === 3) {
-    setStatus("Location request timed out. Try again.", true);
-  } else {
-    setStatus("Location error: " + err.message, true);
-  }
-}
-
-// use this when clicking the loc button
 locBtn.addEventListener("click", () => {
-  if(!navigator.geolocation){ setStatus("Geolocation not supported in this browser.", true); return; }
-  setStatus("Requesting your location…");
   navigator.geolocation.getCurrentPosition(
     pos => fetchWeatherByCoords(pos.coords.latitude, pos.coords.longitude),
-    onLocationError,
-    { enableHighAccuracy: true, timeout: 12000 }
+    () => setStatus("Location denied", true)
   );
 });
-fetchUV(lat, lon);
