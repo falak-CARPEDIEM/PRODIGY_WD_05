@@ -1,1 +1,1 @@
-window.LOCAL_API_KEY = "ad0bcebe1bb737b7c94e858d56991a62";
+window.LOCAL_API_KEY = "b6907d289e10d714a6e88b30761fae22";
